@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Air Hockey</title>
+  <style>
+    .spielfeld {
+      border: 1px solid #000;
+      display: block;
+      margin: 0 auto;
+    }
+    #punkteAnzeige, #countdown {
+      text-align: center;
+      font-size: 24px;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1 style="text-align: center;">Air Hockey</h1>
+  <div id="countdown">Zeit: 2:00</div>
+  <canvas class="spielfeld" id="spielfeld" width="650" height="350"></canvas>
+  <div id="punkteAnzeige">0 : 0</div>
+  <p style="text-align: center;">Falls der Puck in der Wand buggt, drücke Z, 
+  um neu zu starten lade die seite neu</p>
+
+  <script>
+    const canvas = document.getElementById('spielfeld');
+    const ctx = canvas.getContext('2d');
+    const abstand = canvas.width / 22;
+
+    let pusher1 = { x: abstand, y: canvas.height / 2, radius: 19, dx: 0, dy: 0 };
+    let pusher2 = { x: canvas.width - abstand, y: canvas.height / 2, radius: 19, dx: 0, dy: 0 };
+
+    let puck = { x: canvas.width / 2, y: canvas.height / 2, radius: 12, dx: 0, dy: 0 };
+
+    const torBreite = 10;
+    const torHoehe = 100;
+    const torLinks = { x: 0, y: (canvas.height - torHoehe) / 2, width: torBreite, height: torHoehe };
+    const torRechts = { x: canvas.width - torBreite, y: (canvas.height - torHoehe) / 2, width: torBreite, height: torHoehe };
+
+    let punkteSpieler1 = 0;
+    let punkteSpieler2 = 0;
+
+    let spielGestartet = false;
+    let spielBeendet = false;
+    let startZeit = null;
+    const spielDauer = 2 * 60 * 1000;
+    const countdownAnzeige = document.getElementById('countdown');
+
+    document.addEventListener("keydown", (e) => {
+      if (e.code === "Space" && !spielGestartet) {
+        startSpiel();
+      }
+    });
+
+    function zeichne() {
+      if (!spielGestartet || spielBeendet) return;
+
+      const vergangeneZeit = Date.now() - startZeit;
+      const verbleibend = Math.max(0, spielDauer - vergangeneZeit);
+
+      const minuten = Math.floor(verbleibend / 60000);
+      const sekunden = Math.floor((verbleibend % 60000) / 1000);
+      countdownAnzeige.textContent = "Zeit: " + minuten + ":" + (sekunden < 10 ? "0" : "") + sekunden;
+
+      if (verbleibend <= 0) {
+        spielBeenden();
+        return;
+      }
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Bewegung
+      pusher1.x += pusher1.dx;
+      pusher1.y += pusher1.dy;
+      pusher2.x += pusher2.dx;
+      pusher2.y += pusher2.dy;
+
+      // Begrenzung
+      pusher1.x = Math.max(pusher1.radius, Math.min(canvas.width * 0.5 - pusher1.radius, pusher1.x));
+      pusher1.y = Math.max(pusher1.radius, Math.min(canvas.height - pusher1.radius, pusher1.y));
+      pusher2.x = Math.max(canvas.width / 2 + pusher2.radius, Math.min(canvas.width - pusher2.radius, pusher2.x));
+      pusher2.y = Math.max(pusher2.radius, Math.min(canvas.height - pusher2.radius, pusher2.y));
+
+      // Pusher zeichnen
+      ctx.beginPath();
+      ctx.arc(pusher1.x, pusher1.y, pusher1.radius, 0, Math.PI * 2);
+      ctx.fillStyle = 'blue';
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(pusher2.x, pusher2.y, pusher2.radius, 0, Math.PI * 2);
+      ctx.fillStyle = 'red';
+      ctx.fill();
+
+      // Puck bewegen
+      puck.x += puck.dx;
+      puck.y += puck.dy;
+
+      // Puck-Kollision mit Wand
+      if (puck.x - puck.radius <= 0 || puck.x + puck.radius >= canvas.width) puck.dx *= -1;
+      if (puck.y - puck.radius <= 0 || puck.y + puck.radius >= canvas.height) puck.dy *= -1;
+
+      checkCollision(pusher1);
+      checkCollision(pusher2);
+
+      // Puck zeichnen
+      ctx.beginPath();
+      ctx.arc(puck.x, puck.y, puck.radius, 0, Math.PI * 2);
+      ctx.fillStyle = 'green';
+      ctx.fill();
+
+      // Tore zeichnen
+      ctx.fillStyle = 'green';
+      ctx.fillRect(torLinks.x, torLinks.y, torLinks.width, torLinks.height);
+      ctx.fillRect(torRechts.x, torRechts.y, torRechts.width, torRechts.height);
+
+      // Tore erkennen
+      if (puck.x - puck.radius <= torLinks.x + torLinks.width &&
+          puck.y >= torLinks.y &&
+          puck.y <= torLinks.y + torLinks.height) {
+        Tor("links");
+      }
+
+      if (puck.x + puck.radius >= torRechts.x &&
+          puck.y >= torRechts.y &&
+          puck.y <= torRechts.y + torRechts.height) {
+        Tor("rechts");
+      }
+
+      requestAnimationFrame(zeichne);
+    }
+
+    function Tor(wer) {
+      if (wer === "links") {
+        punkteSpieler2++;
+      } else if (wer === "rechts") {
+        punkteSpieler1++;
+      }
+
+      puck.x = canvas.width / 2;
+      puck.y = canvas.height / 2;
+      puck.dx = 0;
+      puck.dy = 0;
+
+      pusher1.x = abstand;
+      pusher1.y = canvas.height / 2;
+      pusher1.dx = 0;
+      pusher1.dy = 0;
+
+      pusher2.x = canvas.width - abstand;
+      pusher2.y = canvas.height / 2;
+      pusher2.dx = 0;
+      pusher2.dy = 0;
+
+      document.getElementById('punkteAnzeige').textContent =
+        punkteSpieler1 + " : " + punkteSpieler2;
+    }
+
+    function checkCollision(pusher) {
+      const dx = puck.x - pusher.x;
+      const dy = puck.y - pusher.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance < puck.radius + pusher.radius) {
+        puck.dx = dx / distance * 1.87;
+        puck.dy = dy / distance * 1.87;
+      }
+    }
+
+    function spielBeenden() {
+      spielBeendet = true;
+      alert("Spiel beendet! Endstand: " + punkteSpieler1 + " : " + punkteSpieler2);
+    }
+
+    function startSpiel() {
+      spielGestartet = true;
+      spielBeendet = false;
+      startZeit = Date.now();
+      zeichne();
+    }
+
+    function zeichneStartBildschirm() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = 'green';
+      ctx.fillRect(torLinks.x, torLinks.y, torLinks.width, torLinks.height);
+      ctx.fillRect(torRechts.x, torRechts.y, torRechts.width, torRechts.height);
+
+      ctx.beginPath();
+      ctx.arc(pusher1.x, pusher1.y, pusher1.radius, 0, Math.PI * 2);
+      ctx.fillStyle = 'blue';
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(pusher2.x, pusher2.y, pusher2.radius, 0, Math.PI * 2);
+      ctx.fillStyle = 'red';
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(puck.x, puck.y, puck.radius, 0, Math.PI * 2);
+      ctx.fillStyle = 'green';
+      ctx.fill();
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (spielBeendet) return;
+      switch (e.key) {
+        case "w": pusher1.dy = -2.5; break;
+        case "s": pusher1.dy = 2.5; break;
+        case "a": pusher1.dx = -2.5; break;
+        case "d": pusher1.dx = 2.5; break;
+        case "ArrowUp": pusher2.dy = -2.5; break;
+        case "ArrowDown": pusher2.dy = 2.5; break;
+        case "ArrowLeft": pusher2.dx = -2.5; break;
+        case "ArrowRight": pusher2.dx = 2.5; break;
+      }
+    });
+
+    document.addEventListener('keyup', (e) => {
+      if (spielBeendet) return;
+      switch (e.key) {
+        case "w":
+        case "s":
+          pusher1.dy = 0;
+          break;
+        case "a":
+        case "d":
+          pusher1.dx = 0;
+          break;
+        case "ArrowUp":
+        case "ArrowDown":
+          pusher2.dy = 0;
+          break;
+        case "ArrowLeft":
+        case "ArrowRight":
+          pusher2.dx = 0;
+          break;
+        case "z":
+          debugg();
+          break;
+      }
+    });
+
+    function debugg() {
+      puck.x = canvas.width / 2;
+      puck.y = canvas.height / 2;
+      puck.dx = 0;
+      puck.dy = 0;
+
+      pusher1.x = abstand;
+      pusher1.y = canvas.height / 2;
+      pusher1.dx = 0;
+      pusher1.dy = 0;
+
+      pusher2.x = canvas.width - abstand;
+      pusher2.y = canvas.height / 2;
+      pusher2.dx = 0;
+      pusher2.dy = 0;
+    }
+
+    // Startbild anzeigen
+    zeichneStartBildschirm();
+  </script>
+</body>
+</html>
